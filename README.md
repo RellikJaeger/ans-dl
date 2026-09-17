@@ -62,7 +62,7 @@ ans-dl "https://aninewstage.org/view/<slug>" -p 6             # 6 chapters in pa
 - Copy and paste this into Terminal.
 
 ```shell
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" && brew update && brew upgrade -y && brew install git python && pip3 install pillow && brew cleanup --prune=all && cd "$HOME" && rm -rf "./ans-dl/" && git clone -b main --depth 1 https://github.com/RellikJaeger/ans-dl && mkdir -p "$HOME/.local/bin" && source "$HOME/.zshrc" && mv "./ans-dl/ans-dl" "./ans-dl/ans-dl.py" "$HOME/.local/bin/" && chmod a+x "$HOME/.local/bin/ans-dl" && rm -rf "./ans-dl/" && clear && ans-dl --help
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" && brew update && brew upgrade -y && brew install git python pillow && brew cleanup --prune=all && cd "$HOME" && rm -rf "./ans-dl/" && git clone -b main --depth 1 https://github.com/RellikJaeger/ans-dl && mkdir -p "$HOME/.local/bin" && source "$HOME/.zshrc" && mv "./ans-dl/ans-dl" "./ans-dl/ans-dl.py" "$HOME/.local/bin/" && chmod a+x "$HOME/.local/bin/ans-dl" && rm -rf "./ans-dl/" && clear && ans-dl --help
 ```
 
 ### Usage example
