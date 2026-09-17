@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.kilo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test output (from our verification runs)
+test-e2e-*/
+
+node_modules
+.env

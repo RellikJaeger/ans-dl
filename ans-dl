@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# ans-dl — launcher for ans-dl.py (same directory)
+DIR="$(cd "$(dirname "$0")" && pwd)"
+exec python3 "$DIR/ans-dl.py" "$@"
