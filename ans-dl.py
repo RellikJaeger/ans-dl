@@ -16,6 +16,7 @@ Usage:
 
     -p N / --parallel N   Number of concurrent chapter downloads
                           (default: 4, only used for multi-chapter downloads)
+    -u / up / upgrade      Self-upgrade: re-install from GitHub
 
 Output layout:
     <slug>/chapter-01/page-01.png
@@ -49,7 +50,7 @@ import json
 import os
 import re
 import signal
-import platform
+import subprocess
 import sys
 import time
 import urllib.error
@@ -350,7 +351,7 @@ def discover_chapters(details_url: str) -> list[tuple[int, str, str]]:
     # Also try to find chapters via any link containing /chapter/
     if not chapters:
         chapter_links2 = re.findall(
-            r'href="([^\"]*?/chapter/(\d+)[^\"]*)"',
+            r'href="([^"]*?/chapter/(\d+)[^\"]*)"',
             html,
         )
         for href, num_str in chapter_links2:
@@ -818,12 +819,195 @@ def download_all_chapters(
 # CLI
 # ---------------------------------------------------------------------------
 
+def _do_upgrade() -> None:
+    """Self-upgrade: re-install from GitHub (yt-style `up` command).
+
+    Detects platform and runs the appropriate upgrade one-liner via
+    subprocess. On Windows, prints instructions since the multi-command
+    chain is a PowerShell/cmd operation.
+    """
+    plat = sys.platform
+    repo = "https://github.com/RellikJaeger/ans-dl"
+
+    if plat == "darwin":
+        # macOS — brew handles all deps including Pillow.
+        # Print the copy-paste one-liner (same as the install command in README).
+        # User pastes it into their own terminal — separate process, fully auto.
+        print("Upgrading ans-dl (macOS)...")
+        print()
+        print(
+            "/bin/bash -c \"$(curl -fsSL "
+            "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\" "
+            "&& brew update && brew upgrade -y "
+            "&& brew install git python pillow "
+            "&& brew cleanup --prune=all "
+            "&& cd \"$HOME\" "
+            "&& rm -rf \"./ans-dl/\" "
+            "&& git clone -b main --depth 1 " + repo + " "
+            "&& mkdir -p \"$HOME/.local/bin\" "
+            "&& source \"$HOME/.zshrc\" "
+            "&& mv \"./ans-dl/ans-dl\" \"./ans-dl/ans-dl.py\" \"$HOME/.local/bin/\" "
+            "&& chmod a+x \"$HOME/.local/bin/ans-dl\" "
+            "&& rm -rf \"./ans-dl/\" "
+            "&& clear "
+            "&& ans-dl --help"
+        )
+        print()
+        print()
+        print("Run the commands above in your terminal to upgrade ans-dl.")
+        print()
+
+    elif plat == "win32":
+        # Windows — the upgrade is a PowerShell/cmd multi-command chain.
+        # Print it for the user to copy-paste (subprocess can't easily
+        # replicate the start /i cmd /k ... && exit pattern).
+        print("Upgrading ans-dl (Windows)...")
+        print()
+        cmd = (
+            "powershell -c \"Set-ExecutionPolicy RemoteSigned -Scope CurrentUser; "
+            "irm https://get.scoop.sh | iex; exit\" "
+            "&& scoop install git python sudo pillow "
+            "&& cd %UserProfile% "
+            "&& rm -rf \".\\ans-dl\\\" "
+            "&& git clone -b main " + repo + " "
+            "&& sudo cmd /c move /y \".\\ans-dl\\ans-dl.bat\" \".\\ans-dl\\ans-dl.py\" \"%SystemRoot%\\\" "
+            "&& rm -rf \".\\ans-dl\\\" "
+            "&& start /i cmd /k \"ans-dl --help\" "
+            "&& exit"
+        )
+        print(cmd)
+        print()
+
+    elif plat == "linux":
+        if os.path.exists("/data/data/com.termux/files/usr/bin/pkg"):
+            # Termux — pkg is the package manager, pip for Pillow
+            cmd = (
+                "yes | (pkg up && pkg in git python python-pip ffmpeg "
+                "&& pip install --upgrade pillow "
+                "&& git clone -b main --depth 1 " + repo + " "
+                "&& chmod a+x ans-dl/ans-dl "
+                "&& mv ans-dl/ans-dl ans-dl/ans-dl.py $PREFIX/bin "
+                "&& rm -rf ans-dl "
+                "&& mkdir -p $HOME/bin "
+                "&& if [ -x \"$HOME/bin/termux-url-opener\" ]; then "
+                "    if grep -q \"aninewstage\" \"$HOME/bin/termux-url-opener\"; then "
+                "        echo \"Existing termux-url-opener already handles aninewstage.org — leaving it alone\"; "
+                "    else "
+                "        cp \"$HOME/bin/termux-url-opener\" \"$HOME/bin/termux-url-opener-orig\"; "
+                "        cat > \"$HOME/bin/termux-url-opener\" << 'EOF'"
+            )
+            # Write the heredoc content for termux-url-opener
+            url_opener_content = (
+                "#!/bin/bash\n"
+                "remaining=()\n"
+                "for url in \"$@\"; do\n"
+                "    case \"$url\" in\n"
+                "        http://aninewstage.org/*|https://aninewstage.org/*)\n"
+                "            ans-dl \"$url\"\n"
+                "            ;;\n"
+                "        *)\n"
+                "            remaining+=(\"$url\")\n"
+                "            ;;\n"
+                "    esac\n"
+                "done\n"
+                "if [ ${#remaining[@]} -gt 0 ]; then\n"
+                "    \"$HOME/bin/termux-url-opener-orig\" \"${remaining[@]}\"\n"
+                "fi\n"
+            )
+            cmd += "\n" + url_opener_content + "\nEOF\n"
+            cmd += (
+                "    fi; else if command -v yt >/dev/null 2>&1; then "
+                "cat > \"$HOME/bin/termux-url-opener\" << 'EOF'"
+            )
+            yt_opener_content = (
+                "#!/bin/bash\n"
+                "remaining=()\n"
+                "for url in \"$@\"; do\n"
+                "    case \"$url\" in\n"
+                "        http://aninewstage.org/*|https://aninewstage.org/*)\n"
+                "            ans-dl \"$url\"\n"
+                "            ;;\n"
+                "        *)\n"
+                "            remaining+=(\"$url\")\n"
+                "            ;;\n"
+                "    esac\n"
+                "done\n"
+                "if [ ${#remaining[@]} -gt 0 ]; then\n"
+                "    yt \"${remaining[@]}\"\n"
+                "fi\n"
+                "EOF\n"
+            )
+            cmd += "\n" + yt_opener_content + "\nEOF\n"
+            cmd += (
+                "else cat > \"$HOME/bin/termux-url-opener\" << 'EOF'"
+            )
+            ansdl_only_content = (
+                "#!/bin/bash\n"
+                "for url in \"$@\"; do\n"
+                "    case \"$url\" in\n"
+                "        http://aninewstage.org/*|https://aninewstage.org/*)\n"
+                "            ans-dl \"$url\"\n"
+                "            ;;\n"
+                "    esac\n"
+                "done\n"
+                "EOF\n"
+            )
+            cmd += "\n" + ansdl_only_content
+            cmd += (
+                "fi; fi "
+                "&& chmod a+x \"$HOME/bin/termux-url-opener\") "
+                "&& rm -rf $HOME/bin/ans-dl $HOME/.local/bin/ans-dl "
+                "&& if ! grep -qxF \"export PATH=\\$HOME/bin:\\$PATH\" \"$HOME/.bashrc\"; then "
+                "    echo \"export PATH=\\$HOME/bin:\\$PATH\" >> \"$HOME/.bashrc\"; "
+                "fi "
+                "&& source \"$HOME/.bashrc\" "
+                "&& clear "
+                "&& ans-dl --help"
+            )
+            print("Upgrading ans-dl (Termux)...")
+            subprocess.run(cmd, shell=True, check=False)
+
+        else:
+            # Regular Linux — apt handles all deps including python3-pil
+            cmd = (
+                "sudo apt update && sudo apt install -y git python3-full python3-pil "
+                "&& cd \"$HOME\" "
+                "&& rm -rf \"./ans-dl/\" "
+                "&& git clone -b main --depth 1 " + repo + " "
+                "&& mkdir -p \"$HOME/.local/bin\" "
+                "&& mv \"./ans-dl/ans-dl\" \"./ans-dl/ans-dl.py\" \"$HOME/.local/bin/\" "
+                "&& chmod a+x \"$HOME/.local/bin/ans-dl\" "
+                "&& rm -rf \"./ans-dl/\" "
+                "&& clear "
+                "&& ans-dl --help"
+            )
+            print("Upgrading ans-dl (Linux)...")
+            subprocess.run(cmd, shell=True, check=False)
+
+    else:
+        print("Upgrading ans-dl...")
+        print()
+        print("Manual upgrade: clone the repo and install platform deps.")
+        print("Repo: " + repo)
+        print()
+
+
 def main() -> None:
     signal.signal(signal.SIGINT, _sigint_handler)
 
     if len(sys.argv) < 2:
         print(__doc__)
         sys.exit(1)
+
+    # Help flag before anything else
+    if "-h" in sys.argv[1:] or "--help" in sys.argv[1:]:
+        print(__doc__)
+        sys.exit(0)
+
+    # Upgrade flag
+    if "-u" in sys.argv[1:] or "up" in sys.argv[1:] or "upgrade" in sys.argv[1:]:
+        _do_upgrade()
+        sys.exit(0)
 
     # Parse optional flags
     parallel = 4   # default: 4 chapters in parallel for multi-chapter downloads

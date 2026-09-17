@@ -25,6 +25,7 @@ Thumbs.db
 
 # Test output (from our verification runs)
 test-e2e-*/
+*-test/
 
 node_modules
 .env
